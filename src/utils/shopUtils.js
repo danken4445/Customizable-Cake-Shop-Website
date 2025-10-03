@@ -1,75 +1,40 @@
 /**
  * Utility to get the current shop ID from URL
- * Supports both subdomain routing (production) and path routing (development)
+ * Supports path-based routing: /shop/:shopId
  */
 
 /**
  * Extract shop ID from current URL
- * Production: cakeshopa.vercel.app → "cakeshopa"
- * Development: localhost:5174/cakeshopa → "cakeshopa"
+ * Expects format: /shop/:shopId or /shop/:shopId/...
  * @returns {string|null} Shop ID or null if not found
  */
 export const getShopId = () => {
-  const hostname = window.location.hostname;
   const pathname = window.location.pathname;
+  const pathSegments = pathname.split("/").filter(Boolean);
 
-  // Development mode: Check for path-based routing (e.g., /cakeshopa)
-  if (hostname === "localhost" || hostname === "127.0.0.1") {
-    const pathSegments = pathname.split("/").filter(Boolean);
-    // If path starts with a shop ID, use it
-    if (pathSegments.length > 0 && !pathSegments[0].includes(".")) {
-      return pathSegments[0];
-    }
-    // Default to env variable or 'shop1' for local development
-    return import.meta.env.VITE_SHOP_ID || "shop1";
+  // Check if URL starts with /shop/
+  if (pathSegments.length >= 2 && pathSegments[0] === "shop") {
+    return pathSegments[1];
   }
 
-  // Production mode: Extract from subdomain
-  // cakeshopa.vercel.app → "cakeshopa"
-  // customdomain.com → use env variable
-  const subdomain = hostname.split(".")[0];
-
-  // If it's the main domain (no subdomain), use env variable
-  if (
-    subdomain === "localhost" ||
-    subdomain === "www" ||
-    hostname.split(".").length < 3
-  ) {
-    return import.meta.env.VITE_SHOP_ID || "shop1";
-  }
-
-  return subdomain;
+  // If not in /shop/:shopId format, return null
+  return null;
 };
 
 /**
- * Check if we're in development mode
- */
-export const isDevelopment = () => {
-  return (
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1"
-  );
-};
-
-/**
- * Get the base URL for routing
- * Development: /shopId
- * Production: /
- */
-export const getBaseUrl = () => {
-  if (isDevelopment()) {
-    const shopId = getShopId();
-    return `/${shopId}`;
-  }
-  return "";
-};
-
-/**
- * Navigate to a route with proper base URL
+ * Navigate to a route with proper shop prefix
  * @param {string} path - Path to navigate to (e.g., '/customize/cake1')
- * @returns {string} Full path with base URL
+ * @param {string} shopId - Shop ID to include in path
+ * @returns {string} Full path with shop prefix (/shop/:shopId/...)
  */
-export const getRoutePath = (path) => {
-  const baseUrl = getBaseUrl();
-  return `${baseUrl}${path}`;
+export const getRoutePath = (path, shopId) => {
+  if (!shopId) {
+    console.warn("shopId is required for getRoutePath");
+    return path;
+  }
+  
+  // Remove leading slash from path if present
+  const cleanPath = path.startsWith("/") ? path.substring(1) : path;
+  
+  return `/shop/${shopId}/${cleanPath}`;
 };

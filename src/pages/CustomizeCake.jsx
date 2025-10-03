@@ -86,7 +86,8 @@ export default function CustomizeCake() {
 
     // Add toppings price
     placedToppings.forEach((topping) => {
-      total += topping.price || 0;
+      const toppingPrice = Number(topping.price) || 0;
+      total += toppingPrice;
     });
 
     return total;
@@ -107,7 +108,7 @@ export default function CustomizeCake() {
       cakeName: cake.name,
       base: selectedBase,
       size: selectedSize,
-      toppings: placedToppings.map((t) => t.name),
+      toppings: placedToppings.map((t) => String(t.name || 'Unknown')),
       totalPrice: calculateTotalPrice(),
       timestamp: new Date().toISOString(),
     };
@@ -180,12 +181,16 @@ export default function CustomizeCake() {
                         Cake Base
                       </label>
                       <Select
-                        selectedKeys={[selectedBase]}
-                        onChange={(e) => setSelectedBase(e.target.value)}
+                        selectedKeys={selectedBase ? [selectedBase] : []}
+                        onSelectionChange={(keys) => {
+                          const selected = Array.from(keys)[0];
+                          setSelectedBase(selected);
+                        }}
                         placeholder="Select cake base"
+                        aria-label="Select cake base"
                       >
                         {options.bases.map((base) => (
-                          <SelectItem key={base} value={base}>
+                          <SelectItem key={base} value={base} textValue={base}>
                             {base}
                           </SelectItem>
                         ))}
@@ -200,12 +205,16 @@ export default function CustomizeCake() {
                         Size
                       </label>
                       <Select
-                        selectedKeys={[selectedSize]}
-                        onChange={(e) => setSelectedSize(e.target.value)}
+                        selectedKeys={selectedSize ? [selectedSize] : []}
+                        onSelectionChange={(keys) => {
+                          const selected = Array.from(keys)[0];
+                          setSelectedSize(selected);
+                        }}
                         placeholder="Select size"
+                        aria-label="Select size"
                       >
                         {Object.entries(options.sizes).map(([size, price]) => (
-                          <SelectItem key={size} value={size}>
+                          <SelectItem key={size} value={size} textValue={`${size} - ₱${price}`}>
                             {size} - ₱{price}
                           </SelectItem>
                         ))}
@@ -246,7 +255,7 @@ export default function CustomizeCake() {
                             variant="flat"
                             size="sm"
                           >
-                            {topping.name} (+₱{topping.price})
+                            {String(topping.name)} (+₱{String(topping.price)})
                           </Chip>
                         ))
                       )}

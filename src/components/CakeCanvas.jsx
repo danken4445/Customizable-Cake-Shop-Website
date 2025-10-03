@@ -54,7 +54,7 @@ export default function CakeCanvas({
           >
             <Image
               src={topping.imageUrl}
-              alt={topping.name}
+              alt={String(topping.name || 'Topping')}
               className="w-12 h-12 object-contain"
             />
             <div className="absolute -top-2 -right-2 opacity-0 group-hover:opacity-100 transition-opacity">

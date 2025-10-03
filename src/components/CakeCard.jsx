@@ -36,9 +36,9 @@ export default function CakeCard({ cake, shopId }) {
           color="secondary"
           variant="shadow"
           size="sm"
-          onClick={() => navigate(`/shop/${shopId}/customize/${cake.id}`)}
+          onClick={() => navigate(`/shop/${shopId}/cake/${cake.id}`)}
         >
-          Customize
+          View Details
         </Button>
       </CardFooter>
     </Card>

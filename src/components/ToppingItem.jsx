@@ -19,11 +19,11 @@ export default function ToppingItem({ topping }) {
     >
       <Image
         src={topping.imageUrl}
-        alt={topping.name}
+        alt={String(topping.name || 'Topping')}
         className="w-16 h-16 object-contain"
       />
-      <p className="text-xs mt-1 text-center font-semibold">{topping.name}</p>
-      <p className="text-xs text-green-600">+₱{topping.price}</p>
+      <p className="text-xs mt-1 text-center font-semibold">{String(topping.name || 'Topping')}</p>
+      <p className="text-xs text-green-600">+₱{String(topping.price || 0)}</p>
     </div>
   );
 }

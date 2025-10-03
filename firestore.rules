@@ -1,0 +1,124 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function: Check if user is super admin
+    function isSuperAdmin() {
+      return request.auth != null && request.auth.token.superAdmin == true;
+    }
+    
+    // Helper function: Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Helper function: Check if user is admin for a specific shop
+    function isAdminForShop(shopId) {
+      return isAuthenticated() && 
+             exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+             shopId in get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.assignedShops;
+    }
+    
+    // Helper function: Validate order data for security
+    function isValidOrderData() {
+      let data = request.resource.data;
+      
+      return data.keys().hasAll(['customerName', 'items', 'totalAmount', 'status', 'createdAt']) &&
+             data.customerName is string && data.customerName.size() > 0 &&
+             data.items is list && data.items.size() > 0 &&
+             data.totalAmount is number && data.totalAmount > 0 &&
+             data.status == 'pending-approval' &&
+             data.createdAt is string &&
+             // Optional fields validation
+             (!data.keys().hasAny(['customerEmail']) || data.customerEmail is string) &&
+             (!data.keys().hasAny(['customerPhone']) || data.customerPhone is string) &&
+             (!data.keys().hasAny(['deliveryAddress']) || data.deliveryAddress is string) &&
+             (!data.keys().hasAny(['specialInstructions']) || data.specialInstructions is string) &&
+             (!data.keys().hasAny(['preferredDate']) || data.preferredDate is string) &&
+             (!data.keys().hasAny(['preferredTime']) || data.preferredTime is string) &&
+             (!data.keys().hasAny(['isPickup']) || data.isPickup is bool) &&
+             (!data.keys().hasAny(['requestType']) || data.requestType == 'customer-request');
+    }
+    
+    // Cake Shops Collection
+    match /cakeShops/{shopId} {
+      // Anyone can read shops (public storefronts)
+      allow read: if true;
+      
+      // Only super admins can create shops
+      allow create: if isSuperAdmin();
+      
+      // Super admins or assigned admins can update shops
+      allow update: if isSuperAdmin() || isAdminForShop(shopId);
+      
+      // Only super admins can delete shops
+      allow delete: if isSuperAdmin();
+      
+      // Cakes subcollection - public read, admin write
+      match /cakes/{cakeId} {
+        allow read: if true;
+        allow write: if isSuperAdmin() || isAdminForShop(shopId);
+      }
+      
+      // Options subcollection - public read, admin write  
+      match /options/{optionId} {
+        allow read: if true;
+        allow write: if isSuperAdmin() || isAdminForShop(shopId);
+      }
+      
+      // Toppings subcollection - public read, admin write
+      match /toppings/{toppingId} {
+        allow read: if true;
+        allow write: if isSuperAdmin() || isAdminForShop(shopId);
+      }
+      
+      // Settings subcollection - public read, admin write
+      match /settings/{settingId} {
+        allow read: if true;
+        allow write: if isSuperAdmin() || isAdminForShop(shopId);
+      }
+      
+      // Orders subcollection - special rules for customer orders
+      match /orders/{orderId} {
+        // Anyone can read orders (for tracking)
+        allow read: if true;
+        
+        // Anonymous users can CREATE orders (customer orders)
+        // But only with specific fields for security
+        allow create: if true && 
+                         isValidOrderData() && 
+                         resource == null;
+        
+        // Only admins can update/delete orders
+        allow update, delete: if isSuperAdmin() || isAdminForShop(shopId);
+      }
+      
+      // Any other subcollections - admin only
+      match /{subcollection}/{document=**} {
+        allow read: if true;
+        allow write: if isSuperAdmin() || isAdminForShop(shopId);
+      }
+    }
+    
+    // Admins Collection
+    match /admins/{adminId} {
+      // Super admins can read all admin documents
+      // Regular admins can read their own document
+      allow read: if isSuperAdmin() || 
+                     (isAuthenticated() && request.auth.uid == adminId);
+      
+      // Super admins can create/update/delete any admin documents
+      // Regular users can create their OWN admin document (for initial setup)
+      allow create: if isSuperAdmin() || 
+                       (isAuthenticated() && request.auth.uid == adminId);
+      
+      // Only super admins can update/delete admin documents
+      allow update, delete: if isSuperAdmin();
+    }
+    
+    // Any other collections (if you add them later)
+    match /{document=**} {
+      allow read, write: if isSuperAdmin();
+    }
+  }
+}

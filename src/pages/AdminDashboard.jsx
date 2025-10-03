@@ -1,318 +1,471 @@
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
-import { db, auth } from "../services/firebase";
-import { signInWithEmailAndPassword, signOut } from "firebase/auth";
-import { useShop } from "../context/ShopContext";
-import { getRoutePath } from "../utils/shopUtils";
+import { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
+import { 
+  collection, 
+  getDocs, 
+  doc, 
+  getDoc, 
+  setDoc, 
+  updateDoc, 
+  deleteDoc, 
+  addDoc,
+  query,
+  orderBy 
+} from 'firebase/firestore';
+import { db } from '../services/firebase';
+import { useAuth } from '../context/AuthContext';
+import CakeModal from '../components/CakeModal';
+import OrderModal from '../components/OrderModal';
+import ProductsTab from '../components/ProductsTab';
+import OrdersTab from '../components/OrdersTab';
+import SettingsTab from '../components/SettingsTab';
+import ToppingsTab from '../components/ToppingsTab';
 import {
-  Spinner,
-  Button,
   Card,
   CardBody,
-  CardHeader,
+  Button,
   Chip,
-  Input,
-  Table,
-  TableHeader,
-  TableColumn,
-  TableBody,
-  TableRow,
-  TableCell,
-  Select,
-  SelectItem,
-} from "@nextui-org/react";
+  useDisclosure,
+  Spinner,
+  Tabs,
+  Tab,
+  Avatar,
+} from '@nextui-org/react';
 
 export default function AdminDashboard() {
+  const { shopId } = useParams();
   const navigate = useNavigate();
-  const { shop, shopId } = useShop();
-
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const { user, isAdmin, hasAccessToShop, signOut, loading: authLoading } = useAuth();
+  
+  const [loading, setLoading] = useState(true);
+  const [shop, setShop] = useState(null);
+  const [cakes, setCakes] = useState([]);
   const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [loginError, setLoginError] = useState("");
+  const [toppings, setToppings] = useState([]);
+  const [settings, setSettings] = useState({});
+  
+  // Modals
+  const { isOpen: isCakeModalOpen, onOpen: onCakeModalOpen, onClose: onCakeModalClose } = useDisclosure();
+  const { isOpen: isOrderModalOpen, onOpen: onOrderModalOpen, onClose: onOrderModalClose } = useDisclosure();
+  
+  // Form states
+  const [selectedCake, setSelectedCake] = useState(null);
+  const [selectedOrder, setSelectedOrder] = useState(null);
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        setIsAuthenticated(true);
-        if (shopId) {
-          fetchShopData();
-        }
-      } else {
-        setIsAuthenticated(false);
+    const initializeDashboard = async () => {
+      // Wait for auth loading to complete
+      if (authLoading) {
+        return;
       }
-    });
 
-    return () => unsubscribe();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shopId]);
+      // If no shopId, can't proceed
+      if (!shopId) {
+        setLoading(false);
+        return;
+      }
+
+      // Check access after auth is loaded
+      if (!user || !isAdmin || !hasAccessToShop(shopId)) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        await Promise.all([
+          fetchShopData(),
+          fetchCakes(),
+          fetchOrders(),
+          fetchToppings(),
+          fetchSettings()
+        ]);
+      } catch (error) {
+        console.error('Error initializing dashboard:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    initializeDashboard();
+  }, [authLoading, user, isAdmin, shopId]);
 
   const fetchShopData = async () => {
-    if (!shopId) return;
-
-    setLoading(true);
     try {
-      // Fetch orders
-      const ordersCollection = collection(db, "cakeShops", shopId, "orders");
-      const ordersSnapshot = await getDocs(ordersCollection);
-      const ordersData = ordersSnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
-      setOrders(
-        ordersData.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      );
+      const shopDoc = await getDoc(doc(db, 'cakeShops', shopId));
+      if (shopDoc.exists()) {
+        setShop({ id: shopDoc.id, ...shopDoc.data() });
+      }
     } catch (error) {
-      console.error("Error fetching shop data:", error);
-    } finally {
-      setLoading(false);
+      console.error('Error fetching shop:', error);
     }
   };
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoginError("");
-    setLoading(true);
-
+  const fetchCakes = async () => {
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      setIsAuthenticated(true);
+      const cakesSnapshot = await getDocs(collection(db, 'cakeShops', shopId, 'cakes'));
+      const cakesData = cakesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setCakes(cakesData);
     } catch (error) {
-      console.error("Login error:", error);
-      setLoginError("Invalid email or password");
-    } finally {
-      setLoading(false);
+      console.error('Error fetching cakes:', error);
+    }
+  };
+
+  const fetchOrders = async () => {
+    try {
+      const ordersQuery = query(
+        collection(db, 'cakeShops', shopId, 'orders'),
+        orderBy('createdAt', 'desc')
+      );
+      const ordersSnapshot = await getDocs(ordersQuery);
+      const ordersData = ordersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setOrders(ordersData);
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    }
+  };
+
+  const fetchToppings = async () => {
+    try {
+      const toppingsSnapshot = await getDocs(collection(db, 'cakeShops', shopId, 'toppings'));
+      const toppingsData = toppingsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setToppings(toppingsData);
+    } catch (error) {
+      console.error('Error fetching toppings:', error);
+    }
+  };
+
+  const fetchSettings = async () => {
+    try {
+      const settingsDoc = await getDoc(doc(db, 'cakeShops', shopId, 'settings', 'general'));
+      if (settingsDoc.exists()) {
+        setSettings(settingsDoc.data());
+      } else {
+        // Default settings
+        setSettings({
+          deliveryEnabled: true,
+          pickupEnabled: true,
+          deliveryFee: 50,
+          minimumOrder: 500,
+          paymentMethods: ['Cash', 'GCash', 'Card'],
+          operatingHours: '8:00 AM - 8:00 PM',
+          contactNumber: '',
+          address: ''
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching settings:', error);
     }
   };
 
   const handleLogout = async () => {
-    await signOut(auth);
-    setIsAuthenticated(false);
-    navigate(getRoutePath("/", shopId));
-  };
-
-  const handleStatusChange = async (orderId, newStatus) => {
     try {
-      const orderRef = doc(db, "cakeShops", shopId, "orders", orderId);
-      await updateDoc(orderRef, { status: newStatus });
-
-      // Update local state
-      setOrders((prev) =>
-        prev.map((order) =>
-          order.id === orderId ? { ...order, status: newStatus } : order
-        )
-      );
+      await signOut();
+      navigate('/admin/login');
     } catch (error) {
-      console.error("Error updating status:", error);
-      alert("Failed to update order status");
+      console.error('Error signing out:', error);
     }
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case "pending":
-        return "warning";
-      case "preparing":
-        return "primary";
-      case "ready":
-        return "success";
-      case "completed":
-        return "default";
-      case "cancelled":
-        return "danger";
-      default:
-        return "default";
+  // Cake Management
+  const handleCreateCake = () => {
+    setSelectedCake(null);
+    onCakeModalOpen();
+  };
+
+  const handleEditCake = (cake) => {
+    setSelectedCake(cake);
+    onCakeModalOpen();
+  };
+
+  const handleSaveCake = async (cakeData, cakeId) => {
+    try {
+      if (cakeId) {
+        // Update existing cake
+        await updateDoc(doc(db, 'cakeShops', shopId, 'cakes', cakeId), cakeData);
+        alert('Cake updated successfully!');
+      } else {
+        // Create new cake
+        await addDoc(collection(db, 'cakeShops', shopId, 'cakes'), cakeData);
+        alert('Cake created successfully!');
+      }
+
+      await fetchCakes();
+    } catch (error) {
+      console.error('Error saving cake:', error);
+      alert('Failed to save cake');
+      throw error; // Re-throw to let CakeModal handle it
     }
   };
 
-  // Login Screen
-  if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-50 py-12 px-4">
-        <div className="max-w-md mx-auto">
-          <Card>
-            <CardHeader>
-              <h1 className="text-3xl font-bold">Shop Owner Login</h1>
-            </CardHeader>
-            <CardBody>
-              <form onSubmit={handleLogin} className="space-y-4">
-                <Input
-                  label="Email"
-                  type="email"
-                  placeholder="owner@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  required
-                />
-                <Input
-                  label="Password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-                {loginError && (
-                  <p className="text-red-500 text-sm">{loginError}</p>
-                )}
-                <Button
-                  color="primary"
-                  type="submit"
-                  className="w-full"
-                  disabled={loading}
-                >
-                  {loading ? <Spinner size="sm" color="white" /> : "Login"}
-                </Button>
-                <Button
-                  color="default"
-                  variant="light"
-                  className="w-full"
-                  onClick={() => navigate("/")}
-                >
-                  Back to Home
-                </Button>
-              </form>
-            </CardBody>
-          </Card>
-        </div>
-      </div>
-    );
-  }
+  const handleDeleteCake = async (cakeId) => {
+    try {
+      await deleteDoc(doc(db, 'cakeShops', shopId, 'cakes', cakeId));
+      setCakes(cakes.filter(c => c.id !== cakeId));
+      alert('Cake deleted successfully');
+    } catch (error) {
+      console.error('Error deleting cake:', error);
+      alert('Failed to delete cake');
+    }
+  };
 
-  // Admin Dashboard
-  if (loading) {
+  // Toppings Management
+  const handleCreateTopping = async (toppingData) => {
+    try {
+      await addDoc(collection(db, 'cakeShops', shopId, 'toppings'), toppingData);
+      alert('Topping created successfully!');
+      await fetchToppings();
+    } catch (error) {
+      console.error('Error creating topping:', error);
+      alert('Failed to create topping');
+      throw error;
+    }
+  };
+
+  const handleEditTopping = async (toppingData, toppingId) => {
+    try {
+      await updateDoc(doc(db, 'cakeShops', shopId, 'toppings', toppingId), toppingData);
+      alert('Topping updated successfully!');
+      await fetchToppings();
+    } catch (error) {
+      console.error('Error updating topping:', error);
+      alert('Failed to update topping');
+      throw error;
+    }
+  };
+
+  const handleDeleteTopping = async (toppingId) => {
+    try {
+      await deleteDoc(doc(db, 'cakeShops', shopId, 'toppings', toppingId));
+      setToppings(toppings.filter(t => t.id !== toppingId));
+      alert('Topping deleted successfully');
+    } catch (error) {
+      console.error('Error deleting topping:', error);
+      alert('Failed to delete topping');
+    }
+  };
+
+  // Order Management
+  const handleViewOrder = (order) => {
+    setSelectedOrder(order);
+    onOrderModalOpen();
+  };
+
+  const handleUpdateOrderStatus = async (orderId, newStatus) => {
+    try {
+      await updateDoc(doc(db, 'cakeShops', shopId, 'orders', orderId), {
+        status: newStatus,
+        updatedAt: new Date().toISOString()
+      });
+      
+      setOrders(orders.map(order => 
+        order.id === orderId ? { ...order, status: newStatus } : order
+      ));
+      
+      alert('Order status updated successfully');
+    } catch (error) {
+      console.error('Error updating order:', error);
+      alert('Failed to update order status');
+    }
+  };
+
+  // Settings Management
+  const handleSettingsChange = (newSettings) => {
+    setSettings(newSettings);
+  };
+
+  const handleSaveSettings = async () => {
+    try {
+      await setDoc(doc(db, 'cakeShops', shopId, 'settings', 'general'), {
+        ...settings,
+        updatedAt: new Date().toISOString()
+      });
+      alert('Settings saved successfully!');
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      alert('Failed to save settings');
+    }
+  };
+
+  if (authLoading || loading) {
     return (
-      <div className="flex justify-center items-center min-h-screen">
+      <div className="min-h-screen flex items-center justify-center">
         <Spinner size="lg" label="Loading dashboard..." />
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-50 py-12 px-4">
-      <div className="max-w-7xl mx-auto">
-        <div className="flex justify-between items-center mb-8">
-          <div>
-            <h1 className="text-4xl font-bold">Admin Dashboard</h1>
-            <p className="text-xl text-gray-600">{shop?.name}</p>
-          </div>
-          <Button color="danger" variant="flat" onClick={handleLogout}>
-            Logout
-          </Button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-          <Card>
-            <CardBody>
-              <p className="text-sm text-gray-600">Total Orders</p>
-              <p className="text-3xl font-bold">{orders.length}</p>
-            </CardBody>
-          </Card>
-          <Card>
-            <CardBody>
-              <p className="text-sm text-gray-600">Pending Orders</p>
-              <p className="text-3xl font-bold text-orange-600">
-                {orders.filter((o) => o.status === "pending").length}
-              </p>
-            </CardBody>
-          </Card>
-          <Card>
-            <CardBody>
-              <p className="text-sm text-gray-600">Total Revenue</p>
-              <p className="text-3xl font-bold text-green-600">
-                ₱{orders.reduce((sum, o) => sum + (o.totalPrice || 0), 0)}
-              </p>
-            </CardBody>
-          </Card>
-        </div>
-
+  if (!shopId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
         <Card>
-          <CardHeader>
-            <h2 className="text-2xl font-bold">Orders</h2>
-          </CardHeader>
-          <CardBody>
-            {orders.length === 0 ? (
-              <p className="text-center text-gray-500 py-8">No orders yet</p>
-            ) : (
-              <Table aria-label="Orders table">
-                <TableHeader>
-                  <TableColumn>ORDER ID</TableColumn>
-                  <TableColumn>CUSTOMER</TableColumn>
-                  <TableColumn>CONTACT</TableColumn>
-                  <TableColumn>ITEMS</TableColumn>
-                  <TableColumn>TOTAL</TableColumn>
-                  <TableColumn>STATUS</TableColumn>
-                  <TableColumn>ACTIONS</TableColumn>
-                </TableHeader>
-                <TableBody>
-                  {orders.map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell className="font-mono text-xs">
-                        {order.id.slice(0, 8)}
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <p className="font-semibold">{order.customerName}</p>
-                          <p className="text-xs text-gray-500">
-                            {order.address}
-                          </p>
-                        </div>
-                      </TableCell>
-                      <TableCell>{order.contact}</TableCell>
-                      <TableCell>
-                        {order.items?.map((item, i) => (
-                          <div key={i} className="text-xs">
-                            {item.cake} ({item.size})
-                          </div>
-                        ))}
-                      </TableCell>
-                      <TableCell className="font-bold">
-                        ₱{order.totalPrice}
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          color={getStatusColor(order.status)}
-                          variant="flat"
-                        >
-                          {order.status}
-                        </Chip>
-                      </TableCell>
-                      <TableCell>
-                        <Select
-                          size="sm"
-                          selectedKeys={[order.status]}
-                          onChange={(e) =>
-                            handleStatusChange(order.id, e.target.value)
-                          }
-                          className="w-32"
-                        >
-                          <SelectItem key="pending" value="pending">
-                            Pending
-                          </SelectItem>
-                          <SelectItem key="preparing" value="preparing">
-                            Preparing
-                          </SelectItem>
-                          <SelectItem key="ready" value="ready">
-                            Ready
-                          </SelectItem>
-                          <SelectItem key="completed" value="completed">
-                            Completed
-                          </SelectItem>
-                          <SelectItem key="cancelled" value="cancelled">
-                            Cancelled
-                          </SelectItem>
-                        </Select>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            )}
+          <CardBody className="text-center">
+            <h2 className="text-2xl font-bold mb-4">Invalid Shop</h2>
+            <p className="mb-4">No shop ID provided in the URL.</p>
+            <Button color="primary" onClick={() => navigate('/admin/my-shops')}>
+              Back to My Shops
+            </Button>
           </CardBody>
         </Card>
+      </div>
+    );
+  }
+
+  if (!user || !isAdmin || !hasAccessToShop(shopId)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card>
+          <CardBody className="text-center">
+            <h2 className="text-2xl font-bold mb-4">Access Denied</h2>
+            <p className="mb-4">You don't have access to this shop.</p>
+            <Button color="primary" onClick={() => navigate('/admin/login')}>
+              Back to Login
+            </Button>
+          </CardBody>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-pink-50 to-purple-50 py-8 px-4">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <Card className="mb-8">
+          <CardBody>
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-4">
+                <Avatar
+                  src={shop?.logoUrl}
+                  name={shop?.name}
+                  size="lg"
+                  className="bg-gradient-to-br from-pink-500 to-purple-600"
+                />
+                <div>
+                  <h1 className="text-3xl font-bold bg-gradient-to-r from-pink-600 to-purple-600 bg-clip-text text-transparent">
+                    {shop?.name || 'Shop Dashboard'}
+                  </h1>
+                  <p className="text-gray-600">Admin Panel</p>
+                </div>
+              </div>
+              <div className="flex gap-3">
+                <Chip color="secondary" variant="flat">
+                  {user?.email}
+                </Chip>
+                <Button color="danger" variant="light" onClick={handleLogout}>
+                  Logout
+                </Button>
+              </div>
+            </div>
+          </CardBody>
+        </Card>
+
+        {/* Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <Card>
+            <CardBody className="text-center">
+              <div className="text-3xl mb-2">🍰</div>
+              <div className="text-2xl font-bold">{cakes.length}</div>
+              <div className="text-sm text-gray-600">Total Cakes</div>
+            </CardBody>
+          </Card>
+          <Card>
+            <CardBody className="text-center">
+              <div className="text-3xl mb-2">📋</div>
+              <div className="text-2xl font-bold">{orders.length}</div>
+              <div className="text-sm text-gray-600">Total Orders</div>
+            </CardBody>
+          </Card>
+          <Card>
+            <CardBody className="text-center">
+              <div className="text-3xl mb-2">⏳</div>
+              <div className="text-2xl font-bold">
+                {orders.filter(o => o.status === 'pending').length}
+              </div>
+              <div className="text-sm text-gray-600">Pending Orders</div>
+            </CardBody>
+          </Card>
+          <Card>
+            <CardBody className="text-center">
+              <div className="text-3xl mb-2">✅</div>
+              <div className="text-2xl font-bold">
+                {orders.filter(o => o.status === 'completed').length}
+              </div>
+              <div className="text-sm text-gray-600">Completed Orders</div>
+            </CardBody>
+          </Card>
+        </div>
+
+        {/* Main Content Tabs */}
+        <Card>
+          <CardBody>
+            <Tabs aria-label="Admin tabs" size="lg" color="secondary">
+              {/* Products Tab */}
+              <Tab key="products" title="🍰 Products">
+                <ProductsTab
+                  cakes={cakes}
+                  onCreateCake={handleCreateCake}
+                  onEditCake={handleEditCake}
+                  onDeleteCake={handleDeleteCake}
+                  shopId={shopId}
+                  onRefresh={fetchCakes}
+                />
+              </Tab>
+
+              {/* Toppings Tab */}
+              <Tab key="toppings" title="🧁 Toppings">
+                <ToppingsTab
+                  toppings={toppings}
+                  onCreateTopping={handleCreateTopping}
+                  onEditTopping={handleEditTopping}
+                  onDeleteTopping={handleDeleteTopping}
+                />
+              </Tab>
+
+              {/* Orders Tab */}
+              <Tab key="orders" title="📋 Orders">
+                <OrdersTab
+                  orders={orders}
+                  onViewOrder={handleViewOrder}
+                  onUpdateOrderStatus={handleUpdateOrderStatus}
+                />
+              </Tab>
+
+              {/* Settings Tab */}
+              <Tab key="settings" title="⚙️ Settings">
+                <SettingsTab
+                  settings={settings}
+                  onSettingsChange={handleSettingsChange}
+                  onSaveSettings={handleSaveSettings}
+                />
+              </Tab>
+            </Tabs>
+          </CardBody>
+        </Card>
+
+        {/* Modals */}
+        <CakeModal
+          isOpen={isCakeModalOpen}
+          onClose={onCakeModalClose}
+          selectedCake={selectedCake}
+          onSave={handleSaveCake}
+          shopId={shopId}
+        />
+
+        <OrderModal
+          isOpen={isOrderModalOpen}
+          onClose={onOrderModalClose}
+          order={selectedOrder}
+          onUpdateStatus={handleUpdateOrderStatus}
+        />
       </div>
     </div>
   );

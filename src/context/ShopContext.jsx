@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
+import { useParams, useLocation } from "react-router-dom";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../services/firebase";
-import { getShopId } from "../utils/shopUtils";
 
 const ShopContext = createContext();
 
@@ -19,15 +19,23 @@ export const ShopProvider = ({ children }) => {
   const [shopId, setShopId] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const location = useLocation();
 
   useEffect(() => {
     const fetchShop = async () => {
       try {
-        const currentShopId = getShopId();
+        // Extract shopId from URL path: /shop/:shopId/...
+        const pathSegments = location.pathname.split("/").filter(Boolean);
+        let currentShopId = null;
+
+        if (pathSegments.length >= 2 && pathSegments[0] === "shop") {
+          currentShopId = pathSegments[1];
+        }
+
         setShopId(currentShopId);
 
         if (!currentShopId) {
-          setError("Shop not found. Please check the URL.");
+          setError(null); // No error for routes that don't need shopId (onboarding, dashboard)
           setLoading(false);
           return;
         }
@@ -50,7 +58,7 @@ export const ShopProvider = ({ children }) => {
     };
 
     fetchShop();
-  }, []);
+  }, [location.pathname]);
 
   return (
     <ShopContext.Provider
