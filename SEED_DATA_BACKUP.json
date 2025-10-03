@@ -1,0 +1,100 @@
+
+{
+
+  "name": "Sweet Treats Bakery",
+  "description": "Homemade cakes and pastries made with love",
+  "logoUrl": "https://via.placeholder.com/100?text=STB",
+  "coverImageUrl": "https://via.placeholder.com/800x300?text=Sweet+Treats+Bakery"
+}
+
+
+{
+ "name": "Chocolate Fudge Cake",
+  "description": "Rich and moist chocolate cake with layers of fudge",
+  "basePrice": 500,
+  "imageUrl": "https://via.placeholder.com/400x400?text=Chocolate+Cake"
+}
+
+{
+  "name": "Vanilla Dream Cake",
+  "description": "Light and fluffy vanilla cake with cream frosting",
+  "basePrice": 450,
+  "imageUrl": "https://via.placeholder.com/400x400?text=Vanilla+Cake"
+}
+
+{
+  "name": "Red Velvet Delight",
+  "description": "Classic red velvet cake with cream cheese frosting",
+  "basePrice": 550,
+  "imageUrl": "https://via.placeholder.com/400x400?text=Red+Velvet"
+}
+
+
+{
+  "bases": [
+    "Chocolate",
+    "Vanilla",
+    "Red Velvet",
+    "Ube",
+    "Mocha",
+    "Carrot"
+  ],
+  "sizes": {
+    "6-inch": 500,
+    "8-inch": 700,
+    "10-inch": 1000,
+    "12-inch": 1500
+  },
+  "toppings": [
+    {
+      "name": "Strawberry",
+      "price": 50,
+      "imageUrl": "https://via.placeholder.com/80?text=🍓"
+    },
+    {
+      "name": "Cherry",
+      "price": 50,
+      "imageUrl": "https://via.placeholder.com/80?text=🍒"
+    },
+    {
+      "name": "Blueberry",
+      "price": 50,
+      "imageUrl": "https://via.placeholder.com/80?text=🫐"
+    },
+    {
+      "name": "Chocolate Drip",
+      "price": 75,
+      "imageUrl": "https://via.placeholder.com/80?text=🍫"
+    },
+    {
+      "name": "Caramel Drizzle",
+      "price": 75,
+      "imageUrl": "https://via.placeholder.com/80?text=🍯"
+    },
+    {
+      "name": "Whipped Cream",
+      "price": 30,
+      "imageUrl": "https://via.placeholder.com/80?text=🍦"
+    },
+    {
+      "name": "Sprinkles",
+      "price": 20,
+      "imageUrl": "https://via.placeholder.com/80?text=✨"
+    },
+    {
+      "name": "Oreo Crumbs",
+      "price": 60,
+      "imageUrl": "https://via.placeholder.com/80?text=🍪"
+    }
+  ]
+}
+
+
+{
+  "name": "Cake Paradise",
+  "description": "Premium custom cakes for every occasion",
+  "logoUrl": "https://via.placeholder.com/100?text=CP",
+  "coverImageUrl": "https://via.placeholder.com/800x300?text=Cake+Paradise"
+}
+
+}
